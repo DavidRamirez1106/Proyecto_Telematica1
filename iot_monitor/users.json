@@ -1,0 +1,68 @@
+{
+  "users": [
+    {
+      "id": "operator_01",
+      "name": "Juan Pérez",
+      "role": "OPERATOR",
+      "token": "tok_op_001",
+      "email": "juan.perez@iot-monitor.local",
+      "active": true
+    },
+    {
+      "id": "operator_02",
+      "name": "María García",
+      "role": "OPERATOR",
+      "token": "tok_op_002",
+      "email": "maria.garcia@iot-monitor.local",
+      "active": true
+    },
+    {
+      "id": "admin_01",
+      "name": "Admin Sistema",
+      "role": "OPERATOR",
+      "token": "tok_admin_001",
+      "email": "admin@iot-monitor.local",
+      "active": true
+    },
+    {
+      "id": "sensor_temp_01",
+      "name": "Sensor Temperatura Planta A",
+      "role": "SENSOR",
+      "token": "tok_temp_001",
+      "email": null,
+      "active": true
+    },
+    {
+      "id": "sensor_hum_01",
+      "name": "Sensor Humedad Planta A",
+      "role": "SENSOR",
+      "token": "tok_hum_001",
+      "email": null,
+      "active": true
+    },
+    {
+      "id": "sensor_pres_01",
+      "name": "Sensor Presión Planta B",
+      "role": "SENSOR",
+      "token": "tok_pres_001",
+      "email": null,
+      "active": true
+    },
+    {
+      "id": "sensor_vib_01",
+      "name": "Sensor Vibración Maquinaria",
+      "role": "SENSOR",
+      "token": "tok_vib_001",
+      "email": null,
+      "active": true
+    },
+    {
+      "id": "sensor_ener_01",
+      "name": "Sensor Energía Tablero Principal",
+      "role": "SENSOR",
+      "token": "tok_ener_001",
+      "email": null,
+      "active": true
+    }
+  ]
+}

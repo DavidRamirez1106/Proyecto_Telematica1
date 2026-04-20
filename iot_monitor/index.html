@@ -1,0 +1,430 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>SIMP Monitor — Panel de Control IoT</title>
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+
+<!-- ═══════════════════════════════════════════
+     PANTALLA DE LOGIN
+════════════════════════════════════════════ -->
+<div id="screen-login" class="screen active">
+  <div class="login-wrapper">
+    <div class="login-card">
+
+      <div class="login-logo">
+        <div class="logo-icon">S</div>
+        <div>
+          <h1>SIMP Monitor</h1>
+          <p class="logo-sub">Sistema de Monitoreo IoT</p>
+        </div>
+      </div>
+
+      <div id="login-error" class="alert alert-error hidden"></div>
+
+      <div class="form-group">
+        <label for="login-id">ID de usuario</label>
+        <input type="text" id="login-id" placeholder="operator_01" autocomplete="username">
+      </div>
+
+      <div class="form-group">
+        <label for="login-token">Token de acceso</label>
+        <input type="password" id="login-token" placeholder="tok_op_001" autocomplete="current-password">
+      </div>
+
+      <button class="btn btn-primary btn-block" id="btn-login">
+        Iniciar sesión
+      </button>
+
+      <p class="login-hint">
+        Acceso solo para operadores autorizados.<br>
+        Credenciales de prueba: <code>operator_01</code> / <code>tok_op_001</code>
+      </p>
+
+    </div>
+  </div>
+</div>
+
+<!-- ═══════════════════════════════════════════
+     PANTALLA PRINCIPAL (DASHBOARD)
+════════════════════════════════════════════ -->
+<div id="screen-dashboard" class="screen">
+
+  <!-- Navbar -->
+  <nav class="navbar">
+    <div class="nav-brand">
+      <span class="nav-logo">S</span>
+      <span class="nav-title">SIMP Monitor</span>
+    </div>
+    <div class="nav-center">
+      <span class="status-dot" id="status-dot"></span>
+      <span id="status-text">Conectando...</span>
+    </div>
+    <div class="nav-right">
+      <span id="nav-user" class="nav-user"></span>
+      <button class="btn btn-sm" id="btn-logout">Cerrar sesión</button>
+    </div>
+  </nav>
+
+  <!-- Tarjetas de métricas -->
+  <div class="metrics-row">
+    <div class="metric-card">
+      <div class="metric-label">Sensores activos</div>
+      <div class="metric-value" id="m-sensors">—</div>
+    </div>
+    <div class="metric-card">
+      <div class="metric-label">Operadores online</div>
+      <div class="metric-value" id="m-operators">—</div>
+    </div>
+    <div class="metric-card">
+      <div class="metric-label">Alertas generadas</div>
+      <div class="metric-value alert-val" id="m-alerts">0</div>
+    </div>
+    <div class="metric-card">
+      <div class="metric-label">Uptime servidor</div>
+      <div class="metric-value" id="m-uptime">—</div>
+    </div>
+  </div>
+
+  <!-- Contenedor principal -->
+  <div class="main-grid">
+
+    <!-- Tabla de sensores -->
+    <section class="panel">
+      <div class="panel-header">
+        <h2>Sensores activos</h2>
+        <button class="btn btn-sm btn-outline" id="btn-refresh">Actualizar</button>
+      </div>
+      <div class="table-wrapper">
+        <table id="sensor-table">
+          <thead>
+            <tr>
+              <th>ID Sensor</th>
+              <th>Tipo</th>
+              <th>Último valor</th>
+              <th>Unidad</th>
+              <th>Estado</th>
+            </tr>
+          </thead>
+          <tbody id="sensor-tbody">
+            <tr><td colspan="5" class="empty-row">Sin datos. Haz clic en Actualizar.</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </section>
+
+    <!-- Panel de alertas -->
+    <section class="panel panel-alerts">
+      <div class="panel-header">
+        <h2>Alertas en tiempo real <span class="badge" id="alert-badge">0</span></h2>
+        <button class="btn btn-sm btn-outline" id="btn-clear-alerts">Limpiar</button>
+      </div>
+      <div id="alert-feed" class="alert-feed">
+        <div class="alert-placeholder">Sin alertas. El sistema está operando normalmente.</div>
+      </div>
+    </section>
+
+  </div>
+
+  <!-- Footer -->
+  <footer class="footer">
+    SIMP Monitor v1.0 &mdash; Internet: Arquitectura y Protocolos &mdash;
+    <span id="footer-time"></span>
+  </footer>
+
+</div>
+
+<script>
+// ═══════════════════════════════════════════════════════════
+// Configuración
+// ═══════════════════════════════════════════════════════════
+const API_BASE    = '';   // mismo host que sirve la página
+const REFRESH_MS  = 10000;  // auto-refresco cada 10 s
+
+// ═══════════════════════════════════════════════════════════
+// Estado de la aplicación
+// ═══════════════════════════════════════════════════════════
+const state = {
+  user:        null,
+  alertCount:  0,
+  refreshTimer: null,
+};
+
+// ═══════════════════════════════════════════════════════════
+// Utilidades DOM
+// ═══════════════════════════════════════════════════════════
+const $  = id => document.getElementById(id);
+const show = id => $(id).classList.remove('hidden');
+const hide = id => $(id).classList.add('hidden');
+
+function showScreen(name) {
+  document.querySelectorAll('.screen').forEach(s => s.classList.remove('active'));
+  $('screen-' + name).classList.add('active');
+}
+
+function fmtUptime(secs) {
+  secs = parseInt(secs) || 0;
+  const h = Math.floor(secs / 3600);
+  const m = Math.floor((secs % 3600) / 60);
+  const s = secs % 60;
+  return `${String(h).padStart(2,'0')}:${String(m).padStart(2,'0')}:${String(s).padStart(2,'0')}`;
+}
+
+function fmtTime(tsStr) {
+  try {
+    const d = tsStr ? new Date(parseInt(tsStr) * 1000) : new Date();
+    return d.toLocaleTimeString('es-CO');
+  } catch { return tsStr; }
+}
+
+// ═══════════════════════════════════════════════════════════
+// Login
+// ═══════════════════════════════════════════════════════════
+async function doLogin() {
+  const id    = $('login-id').value.trim();
+  const token = $('login-token').value.trim();
+
+  if (!id || !token) {
+    showLoginError('Ingresa tu ID y token de acceso.');
+    return;
+  }
+
+  $('btn-login').textContent = 'Verificando...';
+  $('btn-login').disabled    = true;
+
+  try {
+    // El servidor HTTP redirige /api/login al auth service
+    const resp = await fetch(API_BASE + '/api/login', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ id, token }),
+    });
+
+    const data = await resp.json();
+
+    if (data.ok) {
+      state.user = data;
+      hide('login-error');
+      enterDashboard();
+    } else {
+      showLoginError(data.reason || 'Credenciales inválidas.');
+    }
+  } catch (err) {
+    showLoginError('Error de conexión con el servidor.');
+    console.error(err);
+  } finally {
+    $('btn-login').textContent = 'Iniciar sesión';
+    $('btn-login').disabled    = false;
+  }
+}
+
+function showLoginError(msg) {
+  const el = $('login-error');
+  el.textContent = msg;
+  el.classList.remove('hidden');
+}
+
+// ═══════════════════════════════════════════════════════════
+// Dashboard
+// ═══════════════════════════════════════════════════════════
+function enterDashboard() {
+  showScreen('dashboard');
+  $('nav-user').textContent = state.user.name + ' (' + state.user.role + ')';
+  setStatus(true);
+  loadAll();
+  state.refreshTimer = setInterval(loadAll, REFRESH_MS);
+}
+
+function exitDashboard() {
+  clearInterval(state.refreshTimer);
+  state.user       = null;
+  state.alertCount = 0;
+  $('alert-badge').textContent = '0';
+  $('sensor-tbody').innerHTML =
+    '<tr><td colspan="5" class="empty-row">Sin datos.</td></tr>';
+  $('alert-feed').innerHTML =
+    '<div class="alert-placeholder">Sin alertas.</div>';
+  showScreen('login');
+}
+
+function setStatus(ok) {
+  $('status-dot').className = 'status-dot ' + (ok ? 'online' : 'offline');
+  $('status-text').textContent = ok ? 'Servidor en línea' : 'Sin conexión';
+}
+
+async function loadAll() {
+  await Promise.allSettled([loadStatus(), loadSensors(), loadAlerts()]);
+}
+
+// ─── GET /api/status ──────────────────────────────────────
+async function loadStatus() {
+  try {
+    const resp = await fetch(API_BASE + '/api/status');
+    if (!resp.ok) { setStatus(false); return; }
+    const d = await resp.json();
+    setStatus(true);
+    $('m-sensors').textContent   = d.sensors   ?? '—';
+    $('m-operators').textContent = d.operators ?? '—';
+    $('m-alerts').textContent    = d.alerts    ?? '0';
+    $('m-uptime').textContent    = fmtUptime(d.uptime);
+  } catch {
+    setStatus(false);
+  }
+}
+
+// ─── GET /api/sensors ─────────────────────────────────────
+const THRESHOLDS = {
+  TEMPERATURE: [-10,  90],
+  HUMIDITY:    [  0,  95],
+  PRESSURE:    [800, 1100],
+  VIBRATION:   [  0,   2],
+  ENERGY:      [  0,  50],
+};
+
+const SENSOR_LABEL = {
+  TEMPERATURE: 'Temperatura',
+  HUMIDITY:    'Humedad',
+  PRESSURE:    'Presión',
+  VIBRATION:   'Vibración',
+  ENERGY:      'Energía',
+};
+
+function sensorStatus(type, val) {
+  const thr = THRESHOLDS[type];
+  if (!thr) return { text: 'N/D', cls: '' };
+  const v = parseFloat(val);
+  if (isNaN(v)) return { text: 'N/D', cls: '' };
+  if (v < thr[0] || v > thr[1]) return { text: 'ALERTA', cls: 'status-alert' };
+  return { text: 'NORMAL', cls: 'status-ok' };
+}
+
+async function loadSensors() {
+  try {
+    const resp = await fetch(API_BASE + '/api/sensors');
+    if (!resp.ok) return;
+    const sensors = await resp.json();
+
+    const tbody = $('sensor-tbody');
+    if (!sensors.length) {
+      tbody.innerHTML = '<tr><td colspan="5" class="empty-row">Sin sensores conectados.</td></tr>';
+      return;
+    }
+
+    tbody.innerHTML = sensors.map(s => {
+      const st    = sensorStatus(s.type, s.value);
+      const label = SENSOR_LABEL[s.type] || s.type;
+      const val   = parseFloat(s.value);
+      const valStr = isNaN(val) ? s.value : val.toFixed(3);
+      return `<tr class="${st.cls === 'status-alert' ? 'row-alert' : ''}">
+        <td class="mono">${s.id}</td>
+        <td>${label}</td>
+        <td class="mono val-col">${valStr}</td>
+        <td>${s.unit}</td>
+        <td><span class="badge-status ${st.cls}">${st.text}</span></td>
+      </tr>`;
+    }).join('');
+  } catch (err) {
+    console.error('loadSensors:', err);
+  }
+}
+
+// ─── GET /api/alerts ──────────────────────────────────────
+const _shownAlerts = new Set();
+
+async function loadAlerts() {
+  try {
+    const resp = await fetch(API_BASE + '/api/alerts');
+    if (!resp.ok) return;
+    const alerts = await resp.json();
+
+    alerts.forEach(a => {
+      const key = `${a.timestamp}-${a.sensor_id}`;
+      if (_shownAlerts.has(key)) return;
+      _shownAlerts.add(key);
+      appendAlert(a);
+    });
+  } catch (err) {
+    console.error('loadAlerts:', err);
+  }
+}
+
+function appendAlert(a) {
+  state.alertCount++;
+  $('alert-badge').textContent = state.alertCount;
+
+  // Eliminar placeholder si existe
+  const ph = $('alert-feed').querySelector('.alert-placeholder');
+  if (ph) ph.remove();
+
+  const ts  = fmtTime(a.timestamp);
+  const val = parseFloat(a.value);
+  const valStr = isNaN(val) ? a.value : val.toFixed(3);
+
+  const card = document.createElement('div');
+  card.className = 'alert-card alert-card-new';
+  card.innerHTML = `
+    <div class="alert-card-header">
+      <span class="alert-sensor">${a.sensor_id}</span>
+      <span class="alert-time">${ts}</span>
+    </div>
+    <div class="alert-card-body">
+      <span class="alert-type">${SENSOR_LABEL[a.type] || a.type}</span>
+      <span class="alert-value">${valStr} ${a.unit || ''}</span>
+    </div>
+    <div class="alert-desc">${a.desc || a.description || ''}</div>
+  `;
+
+  const feed = $('alert-feed');
+  feed.prepend(card);
+
+  // Quitar clase de animación tras el frame
+  requestAnimationFrame(() => card.classList.remove('alert-card-new'));
+
+  // Limitar a 30 alertas en pantalla
+  const cards = feed.querySelectorAll('.alert-card');
+  if (cards.length > 30) cards[cards.length - 1].remove();
+}
+
+// ═══════════════════════════════════════════════════════════
+// Reloj del footer
+// ═══════════════════════════════════════════════════════════
+function updateClock() {
+  $('footer-time').textContent = new Date().toLocaleString('es-CO');
+}
+setInterval(updateClock, 1000);
+updateClock();
+
+// ═══════════════════════════════════════════════════════════
+// Event listeners
+// ═══════════════════════════════════════════════════════════
+$('btn-login').addEventListener('click', doLogin);
+
+$('login-token').addEventListener('keydown', e => {
+  if (e.key === 'Enter') doLogin();
+});
+
+$('login-id').addEventListener('keydown', e => {
+  if (e.key === 'Enter') $('login-token').focus();
+});
+
+$('btn-logout').addEventListener('click', exitDashboard);
+
+$('btn-refresh').addEventListener('click', () => {
+  loadSensors();
+  loadStatus();
+});
+
+$('btn-clear-alerts').addEventListener('click', () => {
+  $('alert-feed').innerHTML =
+    '<div class="alert-placeholder">Sin alertas.</div>';
+  state.alertCount = 0;
+  $('alert-badge').textContent = '0';
+  _shownAlerts.clear();
+});
+</script>
+
+</body>
+</html>

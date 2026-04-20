@@ -696,6 +696,50 @@ void setup_http_routes(HttpServer& http) {
         return http_json(json);
     });
 
+
+    // POST /api/login — proxy al auth service para la interfaz web
+    http.add_route("/api/login", [](const HttpRequest& req) -> HttpResponse {
+        const char* auth_host_l = std::getenv(AUTH_HOST_ENV);
+        if (!auth_host_l) auth_host_l = AUTH_HOST_DEF;
+
+        struct addrinfo hints2{}, *res2 = nullptr;
+        hints2.ai_family   = AF_INET;
+        hints2.ai_socktype = SOCK_STREAM;
+
+        if (getaddrinfo(auth_host_l, std::to_string(AUTH_PORT).c_str(),
+                        &hints2, &res2) != 0 || !res2) {
+            return http_error(503, "Service Unavailable",
+                              "Auth service no disponible");
+        }
+        int sock2 = ::socket(AF_INET, SOCK_STREAM, 0);
+        struct timeval tv2{}; tv2.tv_sec = 5;
+        setsockopt(sock2, SOL_SOCKET, SO_RCVTIMEO, &tv2, sizeof(tv2));
+        setsockopt(sock2, SOL_SOCKET, SO_SNDTIMEO, &tv2, sizeof(tv2));
+        if (connect(sock2, res2->ai_addr, res2->ai_addrlen) < 0) {
+            freeaddrinfo(res2); close(sock2);
+            return http_error(503, "Service Unavailable",
+                              "No se pudo conectar al auth service");
+        }
+        freeaddrinfo(res2);
+        std::string http_req2 =
+            "POST /login HTTP/1.0\r\n"
+            "Host: " + std::string(auth_host_l) + "\r\n"
+            "Content-Type: application/json\r\n"
+            "Content-Length: " + std::to_string(req.body.size()) + "\r\n"
+            "Connection: close\r\n\r\n" + req.body;
+        ::send(sock2, http_req2.c_str(), http_req2.size(), 0);
+        std::string raw2;
+        char buf2[4096];
+        ssize_t n2;
+        while ((n2 = recv(sock2, buf2, sizeof(buf2)-1, 0)) > 0) {
+            buf2[n2] = '\0'; raw2 += buf2;
+        }
+        close(sock2);
+        size_t bp = raw2.find("\r\n\r\n");
+        std::string jbody = (bp != std::string::npos) ? raw2.substr(bp+4) : "{}";
+        return http_json(jbody);
+    });
+
     // GET /api/alerts — últimas alertas
     http.add_route("/api/alerts", [](const HttpRequest&) -> HttpResponse {
         std::lock_guard<std::mutex> lock(g_state_mutex);
@@ -719,3 +763,7 @@ void setup_http_routes(HttpServer& http) {
         return http_json(json);
     });
 }
+
+// Nota: La ruta /api/login se registra como extensión en http_server
+// El proxy al auth service se realiza desde setup_http_routes en la
+// función _handle_login_proxy que se llama desde la ruta registrada.
