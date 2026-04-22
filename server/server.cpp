@@ -369,6 +369,7 @@ void handle_client(int client_fd,
                         response = SIMP::make_error(SIMP::E001,
                                    "Tipo de sensor desconocido: " + sensor_type);
                     } else {
+                        SensorInfo sensor_copy;
                         {
                             std::lock_guard<std::mutex> lock(g_state_mutex);
                             auto& si      = g_sensors[registered_id];
@@ -376,10 +377,11 @@ void handle_client(int client_fd,
                             si.last_value = value;
                             si.unit       = unit;
                             si.last_seen  = msg.timestamp;
+                            sensor_copy   = si;
                         }
 
                         // Verificar umbrales y disparar alertas
-                        check_thresholds(g_sensors[registered_id], value);
+                        check_thresholds(sensor_copy, value);
 
                         response = SIMP::make_ok("Medicion recibida correctamente");
                     }
@@ -525,24 +527,45 @@ bool authenticate(const std::string& client_id,
     freeaddrinfo(res);
 
     // Enviar petición de validación (formato JSON simple)
-    std::string request = "{\"id\":\"" + client_id +
-                          "\",\"role\":\"" + role +
-                          "\",\"token\":\"" + token + "\"}\n";
+    std::string json_body = "{\"id\":\"" + client_id +
+                            "\",\"role\":\"" + role +
+                            "\",\"token\":\"" + token + "\"}";
+
+    std::string request =
+        "POST /validate HTTP/1.0\r\n"
+        "Host: " + std::string(auth_host) + "\r\n"
+        "Content-Type: application/json\r\n"
+        "Content-Length: " + std::to_string(json_body.size()) + "\r\n"
+        "Connection: close\r\n"
+        "\r\n" + json_body;
+
     send(sock, request.c_str(), request.size(), 0);
 
     // Leer respuesta
+    std::string resp;
     char buf[512] = {};
-    ssize_t bytes = recv(sock, buf, sizeof(buf) - 1, 0);
+    ssize_t bytes;
+    while ((bytes = recv(sock, buf, sizeof(buf) - 1, 0)) > 0) {
+        buf[bytes] = '\0';
+        resp += std::string(buf, bytes);
+    }
     close(sock);
 
-    if (bytes <= 0) {
+    if (resp.empty()) {
         Logger::log_error("auth", "Sin respuesta del auth service");
         return false;
     }
 
-    std::string resp(buf, bytes);
+    // Buscar JSON body (después de \r\n\r\n)
+    size_t body_pos = resp.find("\r\n\r\n");
+    if (body_pos != std::string::npos) {
+        resp = resp.substr(body_pos + 4);
+    }
+
+
     // Respuesta esperada: {"ok":true} o {"ok":false}
-    bool ok = (resp.find("\"ok\":true") != std::string::npos);
+    bool ok = (resp.find("\"ok\":true") != std::string::npos ||
+               resp.find("\"ok\": true") != std::string::npos);
     Logger::log_info("Auth " + client_id + " [" + role + "]: " +
                      (ok ? "ACEPTADO" : "RECHAZADO"));
     return ok;

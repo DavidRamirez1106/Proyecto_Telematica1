@@ -258,7 +258,8 @@ class OperatorClient:
                                 "value":     f[2],
                                 "description": f[3],
                             })
-            self._fire("on_sensor_list", alerts)   # reutiliza el mismo callback
+            for alert in alerts:                
+                self._fire("on_alert", alert)   # reutiliza el mismo callback
 
         elif msg_type == "PONG":
             log.debug("PONG recibido")

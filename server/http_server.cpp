@@ -156,7 +156,7 @@ void HttpServer::handle_client(int client_fd,
     HttpRequest  req  = parse_request(raw_request);
     HttpResponse resp;
 
-    if (req.method != "GET") {
+    if (req.method != "GET"  && req.method != "POST") {
         resp = method_not_allowed();
     } else {
         // Primero busca ruta dinámica registrada

@@ -63,6 +63,46 @@
       "token": "tok_ener_001",
       "email": null,
       "active": true
+    },
+    {
+      "id": "sensor_temp_java_01",
+      "name": "Sensor Temperatura Java",
+      "role": "SENSOR",
+      "token": "tok_temp_001",
+      "email": null,
+      "active": true
+    },
+    {
+      "id": "sensor_hum_java_01",
+      "name": "Sensor Humedad Java",
+      "role": "SENSOR",
+      "token": "tok_hum_001",
+      "email": null,
+      "active": true
+    },
+    {
+      "id": "sensor_pres_java_01",
+      "name": "Sensor Presion Java",
+      "role": "SENSOR",
+      "token": "tok_pres_001",
+      "email": null,
+      "active": true
+    },
+    {
+      "id": "sensor_vib_java_01",
+      "name": "Sensor Vibracion Java",
+      "role": "SENSOR",
+      "token": "tok_vib_001",
+      "email": null,
+      "active": true
+    },
+    {
+      "id": "sensor_ener_java_01",
+      "name": "Sensor Energia Java",
+      "role": "SENSOR",
+      "token": "tok_ener_001",
+      "email": null,
+      "active": true
     }
   ]
 }
