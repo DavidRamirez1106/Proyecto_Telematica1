@@ -1,5 +1,6 @@
 # SIMP Monitor — Sistema Distribuido de Monitoreo IoT
 
+**INTEGRANTES**: Juan José Baron Osorio, Diego Mesa Ospina, David Alejandro Ramirez
 **Protocolo:** SIMP v1.0 (Sensor IoT Monitoring Protocol)  
 **Curso:** Internet: Arquitectura y Protocolos  
 **Despliegue:** AWS EC2 + Route 53
